@@ -1,9 +1,9 @@
-import AudioRecorder from "./components/mic";
+import React from 'react'
 
-export default function Home() {
+const page = () => {
   return (
-    <div className="flex justify-center items-center pt-[100px]">
-      <AudioRecorder />
-    </div>
-  );
+    <h1 className='text-[18px] md:text-[50px] lg:text-[100px]'>Hello WOrld</h1>
+  )
 }
+
+export default page

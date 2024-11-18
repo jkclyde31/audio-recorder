@@ -1,138 +1,82 @@
-'use client';
-import React, { useState, useEffect } from 'react';
+'use client'
 
-const AudioRecorder = () => {
+import { useState, useEffect } from 'react';
+import MicRecorder from 'mic-recorder';
+
+const MicRecorderComponent = () => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioURL, setAudioURL] = useState('');
-  const [recorder, setRecorder] = useState(null);
-  const [error, setError] = useState('');
+  const [audioFile, setAudioFile] = useState(null);
+  const [error, setError] = useState(null);
+  const [recorder, setRecorder] = useState(null); // Track recorder instance
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      import('mic-recorder').then((module) => {
-        const MicRecorder = module.default;
-        const newRecorder = new MicRecorder({
-          bitRate: 128,
-          encoder: 'mp3',
-          sampleRate: 44100
-        });
-        setRecorder(newRecorder);
-      }).catch(err => {
-        setError('Failed to initialize recorder');
-        console.error(err);
-      });
-    }
+    // Only import the mic-recorder on the client-side
+    const recorderInstance = new MicRecorder({
+      bitRate: 128,
+      encoder: 'mp3', // default is mp3, can be wav as well
+      sampleRate: 44100, // default is 44100
+    });
+
+    setRecorder(recorderInstance); // Save the recorder instance to state
+
+    // Cleanup on component unmount
+    return () => {
+      // Optionally stop the recorder if needed
+      if (recorderInstance) {
+        recorderInstance.stop();
+      }
+    };
   }, []);
 
-  const startRecording = () => {
-    if (!recorder) return;
-
-    recorder.start()
-      .then(() => {
-        setIsRecording(true);
-        setError('');
-      })
-      .catch((e) => {
-        setError('Error starting recording. Please check microphone permissions.');
-        console.error(e);
-      });
-  };
-
-  const stopRecording = () => {
-    if (!recorder) return;
-
-    recorder.stop()
-      .getAudio()
-      .then(([buffer, blob]) => {
-        const file = new File(buffer, 'recording.mp3', {
-          type: blob.type,
-          lastModified: Date.now()
-        });
-        
-        const url = URL.createObjectURL(file);
-        setAudioURL(url);
-        setIsRecording(false);
-      })
-      .catch((e) => {
-        setError('Could not retrieve the recording');
-        console.error(e);
-        setIsRecording(false);
-      });
-  };
-
-  const playAudio = () => {
-    if (audioURL) {
-      const player = new Audio(audioURL);
-      player.play().catch(e => {
-        setError('Error playing audio');
-        console.error(e);
-      });
+  const startRecording = async () => {
+    if (!recorder) return; // Ensure recorder is available
+    try {
+      await recorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Error starting recorder', err);
+      setError('Could not start recording. Please check your microphone permissions.');
     }
   };
 
-  const downloadAudio = () => {
-    if (audioURL) {
-      const link = document.createElement('a');
-      link.href = audioURL;
-      link.download = 'recording.mp3';
-      link.click();
+  const stopRecording = async () => {
+    if (!recorder) return; // Ensure recorder is available
+    try {
+      const [buffer, blob] = await recorder.stop().getAudio();
+      const file = new File(buffer, 'me-at-thevoice.mp3', {
+        type: blob.type,
+        lastModified: Date.now(),
+      });
+      setAudioFile(URL.createObjectURL(file));
+      setIsRecording(false);
+    } catch (err) {
+      console.error('Error stopping recorder', err);
+      setError('Could not retrieve your audio file.');
     }
   };
 
   return (
-    <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold text-center mb-6">Voice Recorder</h2>
-      
-      <div className="space-y-4">
-        <div className="flex justify-center">
-          {!isRecording ? (
-            <button
-              onClick={startRecording}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
-            >
-              Start Recording
-            </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50"
-            >
-              Stop Recording
-            </button>
-          )}
-        </div>
-
-        {audioURL && !isRecording && (
-          <div className="flex justify-center space-x-4">
-            <button
-              onClick={playAudio}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
-            >
-              Play
-            </button>
-            <button
-              onClick={downloadAudio}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50"
-            >
-              Download
-            </button>
-          </div>
-        )}
-
-        {error && (
-          <div className="text-red-500 text-center mt-2 p-2 bg-red-50 rounded-lg">
-            {error}
-          </div>
-        )}
-
-        {isRecording && (
-          <div className="text-center text-sm text-gray-500">
-            Recording in progress...
-          </div>
+    <div>
+      <h1>Mic Recorder</h1>
+      <div>
+        {isRecording ? (
+          <button onClick={stopRecording}>Stop Recording</button>
+        ) : (
+          <button onClick={startRecording}>Start Recording</button>
         )}
       </div>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {audioFile && (
+        <div>
+          <p>Recording complete! Click to play:</p>
+          <audio controls>
+            <source src={audioFile} type="audio/mp3" />
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+      )}
     </div>
   );
 };
 
-export default AudioRecorder;
+export default MicRecorderComponent;
