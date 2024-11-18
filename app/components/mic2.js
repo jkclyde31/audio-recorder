@@ -8,6 +8,7 @@ const MicRecorderComponent = () => {
   const [audioFile, setAudioFile] = useState(null);
   const [error, setError] = useState(null);
   const [recorder, setRecorder] = useState(null); // Track recorder instance
+  const [isPermissionGranted, setIsPermissionGranted] = useState(false); // Track microphone permission
 
   useEffect(() => {
     // Only import the mic-recorder on the client-side
@@ -28,8 +29,23 @@ const MicRecorderComponent = () => {
     };
   }, []);
 
+  const requestMicrophonePermission = async () => {
+    try {
+      // Request microphone permission using the browser's mediaDevices API
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      setIsPermissionGranted(true);
+    } catch (err) {
+      console.error('Microphone permission error', err);
+      setError('Microphone access is required. Please enable microphone permissions.');
+    }
+  };
+
   const startRecording = async () => {
-    if (!recorder) return; // Ensure recorder is available
+    if (!recorder || !isPermissionGranted) {
+      // If no permission granted, request it first
+      await requestMicrophonePermission();
+      return;
+    }
     try {
       await recorder.start();
       setIsRecording(true);
