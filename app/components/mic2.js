@@ -1,98 +1,115 @@
 'use client'
 
-import { useState, useEffect } from 'react';
-import MicRecorder from 'mic-recorder';
+import React, { useState, useEffect } from 'react';
+import { Mic, Square, Play, Download } from 'lucide-react';
 
-const MicRecorderComponent = () => {
+const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioFile, setAudioFile] = useState(null);
-  const [error, setError] = useState(null);
-  const [recorder, setRecorder] = useState(null); // Track recorder instance
-  const [isPermissionGranted, setIsPermissionGranted] = useState(false); // Track microphone permission
+  const [audioURL, setAudioURL] = useState('');
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [timer, setTimer] = useState(0);
+  const [recordedChunks, setRecordedChunks] = useState([]);
 
   useEffect(() => {
-    // Only import the mic-recorder on the client-side
-    const recorderInstance = new MicRecorder({
-      bitRate: 128,
-      encoder: 'mp3', // default is mp3, can be wav as well
-      sampleRate: 44100, // default is 44100
-    });
-
-    setRecorder(recorderInstance); // Save the recorder instance to state
-
-    // Cleanup on component unmount
-    return () => {
-      // Optionally stop the recorder if needed
-      if (recorderInstance) {
-        recorderInstance.stop();
-      }
-    };
-  }, []);
-
-  const requestMicrophonePermission = async () => {
-    try {
-      // Request microphone permission using the browser's mediaDevices API
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      setIsPermissionGranted(true);
-    } catch (err) {
-      console.error('Microphone permission error', err);
-      setError('Microphone access is required. Please enable microphone permissions.');
+    let interval;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setTimer((prevTimer) => prevTimer + 1);
+      }, 1000);
     }
+    return () => clearInterval(interval);
+  }, [isRecording]);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const startRecording = async () => {
-    if (!recorder || !isPermissionGranted) {
-      // If no permission granted, request it first
-      await requestMicrophonePermission();
-      return;
-    }
     try {
-      await recorder.start();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        setRecordedChunks(chunks);
+        setAudioURL(URL.createObjectURL(blob));
+      };
+
+      setMediaRecorder(recorder);
+      recorder.start();
       setIsRecording(true);
+      setTimer(0);
     } catch (err) {
-      console.error('Error starting recorder', err);
-      setError('Could not start recording. Please check your microphone permissions.');
+      console.error('Error accessing microphone:', err);
     }
   };
 
-  const stopRecording = async () => {
-    if (!recorder) return; // Ensure recorder is available
-    try {
-      const [buffer, blob] = await recorder.stop().getAudio();
-      const file = new File(buffer, 'me-at-thevoice.mp3', {
-        type: blob.type,
-        lastModified: Date.now(),
-      });
-      setAudioFile(URL.createObjectURL(file));
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
       setIsRecording(false);
-    } catch (err) {
-      console.error('Error stopping recorder', err);
-      setError('Could not retrieve your audio file.');
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const downloadRecording = () => {
+    if (audioURL) {
+      const a = document.createElement('a');
+      a.href = audioURL;
+      a.download = `recording-${new Date().toISOString()}.webm`;
+      a.click();
     }
   };
 
   return (
-    <div>
-      <h1>Mic Recorder</h1>
-      <div>
-        {isRecording ? (
-          <button onClick={stopRecording}>Stop Recording</button>
+    <div className="p-6 max-w-md mx-auto bg-white rounded-xl shadow-lg space-y-4">
+      <div className="text-center space-y-2">
+        <div className="text-2xl font-bold text-gray-800">Audio Recorder</div>
+        <div className="text-gray-500">{isRecording ? 'Recording...' : 'Ready'}</div>
+        <div className="text-xl font-mono">{formatTime(timer)}</div>
+      </div>
+
+      <div className="flex justify-center space-x-4">
+        {!isRecording ? (
+          <button
+            onClick={startRecording}
+            className="flex items-center justify-center p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
+          >
+            <Mic size={24} />
+          </button>
         ) : (
-          <button onClick={startRecording}>Start Recording</button>
+          <button
+            onClick={stopRecording}
+            className="flex items-center justify-center p-3 rounded-full bg-gray-600 hover:bg-gray-700 text-white transition-colors"
+          >
+            <Square size={24} />
+          </button>
         )}
       </div>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {audioFile && (
-        <div>
-          <p>Recording complete! Click to play:</p>
-          <audio controls>
-            <source src={audioFile} type="audio/mp3" />
-            Your browser does not support the audio element.
-          </audio>
+
+      {audioURL && (
+        <div className="space-y-4">
+          <audio controls className="w-full" src={audioURL} />
+          <button
+            onClick={downloadRecording}
+            className="w-full flex items-center justify-center gap-2 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+          >
+            <Download size={20} />
+            Download Recording
+          </button>
         </div>
       )}
     </div>
   );
 };
 
-export default MicRecorderComponent;
+export default AudioRecorder;
