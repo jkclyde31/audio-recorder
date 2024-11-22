@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react';
-import { Mic, Square, Play, Download } from 'lucide-react';
+import { Mic, Square, Play, Download, Save } from 'lucide-react';
 
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
@@ -9,6 +9,17 @@ const AudioRecorder = () => {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [timer, setTimer] = useState(0);
   const [recordedChunks, setRecordedChunks] = useState([]);
+  const [recordingName, setRecordingName] = useState('');
+  const [savedRecordings, setSavedRecordings] = useState([]);
+  const [showAlert, setShowAlert] = useState(false);
+
+  useEffect(() => {
+    // Load saved recordings from localStorage on component mount
+    const loadedRecordings = localStorage.getItem('audioRecordings');
+    if (loadedRecordings) {
+      setSavedRecordings(JSON.parse(loadedRecordings));
+    }
+  }, []);
 
   useEffect(() => {
     let interval;
@@ -48,6 +59,7 @@ const AudioRecorder = () => {
       recorder.start();
       setIsRecording(true);
       setTimer(0);
+      setRecordingName('');
     } catch (err) {
       console.error('Error accessing microphone:', err);
     }
@@ -61,11 +73,36 @@ const AudioRecorder = () => {
     }
   };
 
+  const saveRecording = () => {
+    if (!recordingName.trim()) {
+      setShowAlert(true);
+      return;
+    }
+
+    const newRecording = {
+      id: Date.now(),
+      name: recordingName,
+      date: new Date().toISOString(),
+      duration: timer,
+      url: audioURL
+    };
+
+    const updatedRecordings = [...savedRecordings, newRecording];
+    setSavedRecordings(updatedRecordings);
+    
+    // Save to localStorage
+    localStorage.setItem('audioRecordings', JSON.stringify(updatedRecordings));
+    
+    setShowAlert(false);
+    setRecordingName('');
+  };
+
   const downloadRecording = () => {
     if (audioURL) {
       const a = document.createElement('a');
       a.href = audioURL;
-      a.download = `recording-${new Date().toISOString()}.webm`;
+      const filename = recordingName || `recording-${new Date().toISOString()}`;
+      a.download = `${filename}.webm`;
       a.click();
     }
   };
@@ -83,6 +120,7 @@ const AudioRecorder = () => {
           <button
             onClick={startRecording}
             className="flex items-center justify-center p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
+            aria-label="Start Recording"
           >
             <Mic size={24} />
           </button>
@@ -90,6 +128,7 @@ const AudioRecorder = () => {
           <button
             onClick={stopRecording}
             className="flex items-center justify-center p-3 rounded-full bg-gray-600 hover:bg-gray-700 text-white transition-colors"
+            aria-label="Stop Recording"
           >
             <Square size={24} />
           </button>
@@ -99,13 +138,62 @@ const AudioRecorder = () => {
       {audioURL && (
         <div className="space-y-4">
           <audio controls className="w-full" src={audioURL} />
-          <button
-            onClick={downloadRecording}
-            className="w-full flex items-center justify-center gap-2 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-          >
-            <Download size={20} />
-            Download Recording
-          </button>
+          
+          <div className="space-y-2">
+            <input
+              type="text"
+              placeholder="Enter recording name"
+              value={recordingName}
+              onChange={(e) => setRecordingName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            
+            {showAlert && (
+              <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                Please enter a name for your recording
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={saveRecording}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+              >
+                <Save size={20} />
+                Save
+              </button>
+              
+              <button
+                onClick={downloadRecording}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 rounded transition-colors"
+              >
+                <Download size={20} />
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {savedRecordings.length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-2">Saved Recordings</h3>
+          <div className="space-y-2">
+            {savedRecordings.map((recording) => (
+              <div
+                key={recording.id}
+                className="p-3 bg-gray-50 rounded-lg flex justify-between items-center"
+              >
+                <div>
+                  <div className="font-medium">{recording.name}</div>
+                  <div className="text-sm text-gray-500">
+                    {new Date(recording.date).toLocaleDateString()} - {formatTime(recording.duration)}
+                  </div>
+                </div>
+                <audio controls src={recording.url} className="w-32" />
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
