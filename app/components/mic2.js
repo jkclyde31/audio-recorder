@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Mic, Square, Play, Download, Save } from 'lucide-react';
+import { Mic, Square, Download } from 'lucide-react';
 
 const AudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
@@ -9,17 +9,7 @@ const AudioRecorder = () => {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [timer, setTimer] = useState(0);
   const [recordedChunks, setRecordedChunks] = useState([]);
-  const [recordingName, setRecordingName] = useState('');
-  const [savedRecordings, setSavedRecordings] = useState([]);
-  const [showAlert, setShowAlert] = useState(false);
-
-  useEffect(() => {
-    // Load saved recordings from localStorage on component mount
-    const loadedRecordings = localStorage.getItem('audioRecordings');
-    if (loadedRecordings) {
-      setSavedRecordings(JSON.parse(loadedRecordings));
-    }
-  }, []);
+  const [fileName, setFileName] = useState('recording');
 
   useEffect(() => {
     let interval;
@@ -59,7 +49,6 @@ const AudioRecorder = () => {
       recorder.start();
       setIsRecording(true);
       setTimer(0);
-      setRecordingName('');
     } catch (err) {
       console.error('Error accessing microphone:', err);
     }
@@ -69,41 +58,28 @@ const AudioRecorder = () => {
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
       setIsRecording(false);
-      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      mediaRecorder.stream.getTracks().forEach((track) => track.stop());
     }
   };
 
-  const saveRecording = () => {
-    if (!recordingName.trim()) {
-      setShowAlert(true);
-      return;
-    }
-
-    const newRecording = {
-      id: Date.now(),
-      name: recordingName,
-      date: new Date().toISOString(),
-      duration: timer,
-      url: audioURL
-    };
-
-    const updatedRecordings = [...savedRecordings, newRecording];
-    setSavedRecordings(updatedRecordings);
-    
-    // Save to localStorage
-    localStorage.setItem('audioRecordings', JSON.stringify(updatedRecordings));
-    
-    setShowAlert(false);
-    setRecordingName('');
-  };
-
-  const downloadRecording = () => {
+  const downloadRecording = async () => {
     if (audioURL) {
+      const downloadName = `${fileName}-${new Date().toISOString()}.webm`;
       const a = document.createElement('a');
       a.href = audioURL;
-      const filename = recordingName || `recording-${new Date().toISOString()}`;
-      a.download = `${filename}.webm`;
+      a.download = downloadName;
       a.click();
+
+      // Save the recording name to the JSON file
+      try {
+        await fetch('/api/recordings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: downloadName }),
+        });
+      } catch (error) {
+        console.error('Failed to save recording name:', error);
+      }
     }
   };
 
@@ -120,7 +96,6 @@ const AudioRecorder = () => {
           <button
             onClick={startRecording}
             className="flex items-center justify-center p-3 rounded-full bg-red-500 hover:bg-red-600 text-white transition-colors"
-            aria-label="Start Recording"
           >
             <Mic size={24} />
           </button>
@@ -128,7 +103,6 @@ const AudioRecorder = () => {
           <button
             onClick={stopRecording}
             className="flex items-center justify-center p-3 rounded-full bg-gray-600 hover:bg-gray-700 text-white transition-colors"
-            aria-label="Stop Recording"
           >
             <Square size={24} />
           </button>
@@ -137,63 +111,21 @@ const AudioRecorder = () => {
 
       {audioURL && (
         <div className="space-y-4">
+          <input
+            type="text"
+            className="w-full p-2 border rounded"
+            placeholder="Enter file name"
+            value={fileName}
+            onChange={(e) => setFileName(e.target.value)}
+          />
           <audio controls className="w-full" src={audioURL} />
-          
-          <div className="space-y-2">
-            <input
-              type="text"
-              placeholder="Enter recording name"
-              value={recordingName}
-              onChange={(e) => setRecordingName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            
-            {showAlert && (
-              <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                Please enter a name for your recording
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                onClick={saveRecording}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-              >
-                <Save size={20} />
-                Save
-              </button>
-              
-              <button
-                onClick={downloadRecording}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 hover:bg-gray-50 rounded transition-colors"
-              >
-                <Download size={20} />
-                Download
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {savedRecordings.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-2">Saved Recordings</h3>
-          <div className="space-y-2">
-            {savedRecordings.map((recording) => (
-              <div
-                key={recording.id}
-                className="p-3 bg-gray-50 rounded-lg flex justify-between items-center"
-              >
-                <div>
-                  <div className="font-medium">{recording.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {new Date(recording.date).toLocaleDateString()} - {formatTime(recording.duration)}
-                  </div>
-                </div>
-                <audio controls src={recording.url} className="w-32" />
-              </div>
-            ))}
-          </div>
+          <button
+            onClick={downloadRecording}
+            className="w-full flex items-center justify-center gap-2 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+          >
+            <Download size={20} />
+            Download Recording
+          </button>
         </div>
       )}
     </div>
